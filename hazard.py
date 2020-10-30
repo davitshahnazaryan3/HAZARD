@@ -10,20 +10,24 @@ import numpy as np
 
 
 class Hazard:
-    def __init__(self, haz_dir, flname):
+    def __init__(self, flname, outputDir, haz_fit=1, pflag=False, save_data=True):
         """
-         initialize hazard definition or fits the hazard function and generates files for reading
-         :param haz_dir: str                                 Hazard directory
-         :param flname: str                                  Hazard file name
-         :return: None
-         """
+        initialize hazard definition or fits the hazard function and generates files for reading
+        :param flname: str                                  Hazard file name
+        :param outputDir: str                               Hazard directory
+        :param haz_fit: int                                 Hazard fitting function to use (1, 2, 3)
+        :param pflag: bool                                  Plot info or not
+        :param save_data: bool                              Save fitted data or not
+        :return: None
+        """
         self.flname = flname
-        self.haz_dir = haz_dir
+        self.outputDir = outputDir
         self.data_exists = self.check_data()
         if self.data_exists:
+            print("[NOTIFICATION] Hazard data exists!")
             pass
         else:
-            HazardFit(self.haz_dir, self.flname, haz_fit=1, pflag=False, save_data=True)
+            HazardFit(self.outputDir, self.flname, haz_fit=haz_fit, pflag=pflag, save_data=save_data)
 
     def check_data(self):
         """
@@ -31,7 +35,8 @@ class Hazard:
         :return: bool                                       Hazard data exists or not
         """
         data_exists = False
-        for file in os.listdir(self.haz_dir):
+
+        for file in os.listdir(self.outputDir):
             if file.startswith("coef"):
                 data_exists = True
                 break
@@ -46,11 +51,12 @@ class Hazard:
                                                             Fitted hazard
                                                             Original hazard data
         """
-        with open(self.haz_dir / f"coef_{self.flname}", 'rb') as file:
+        file = os.path.basename(self.flname)
+        with open(self.outputDir / f"coef_{file}", 'rb') as file:
             coefs = pickle.load(file)
-        with open(self.haz_dir / f"fit_{self.flname}", 'rb') as file:
+        with open(self.outputDir / f"fit_{file}", 'rb') as file:
             hazard_data = pickle.load(file)
-        with open(self.haz_dir / self.flname, 'rb') as file:
+        with open(self.outputDir / file, 'rb') as file:
             original_hazard = pickle.load(file)
 
         return coefs, hazard_data, original_hazard
@@ -59,14 +65,14 @@ class Hazard:
 class HazardFit:
     def __init__(self, directory, filename, haz_fit=1, pflag=False, save_data=True):
         """
-                init hazard fitting tool
-                :param directory: str                                   Hazard file directory
-                :param filename: str                                    Hazard file name
-                :param haz_fit: int                                     Hazard fitting function to use (1, 2, 3)
-                :param pflag: bool                                      Plot info or not
-                :param save_data: bool                                  Save fitted data or not
-                :return: None
-                """
+        init hazard fitting tool
+        :param directory: str                                   Hazard file directory
+        :param filename: str                                    Hazard file name
+        :param haz_fit: int                                     Hazard fitting function to use (1, 2, 3)
+        :param pflag: bool                                      Plot info or not
+        :param save_data: bool                                  Save fitted data or not
+        :return: None
+        """
         self.directory = directory
         self.filename = filename
         self.pflag = pflag
@@ -80,7 +86,7 @@ class HazardFit:
         reads provided hazard data and plots them
         :return: dict                                           True hazard data
         """
-        with open(self.directory / self.filename, 'rb') as file:
+        with open(self.filename, 'rb') as file:
             [im, s, apoe] = pickle.load(file)
             im = np.array(im)
             s = np.array(s)
@@ -143,10 +149,12 @@ class HazardFit:
         :param info: dict               Fitted hazard data
         :return: None
         """
+
+        file = os.path.basename(self.filename)
         hazard_data = {'hazard_fit': info['hazard_fit'], 's': info['s_fit'], 'T': info['T']}
-        with open(self.directory / f"coef_{self.filename}", 'wb') as handle:
+        with open(self.directory / f"coef_{file}", 'wb') as handle:
             pickle.dump(info['coefs'], handle)
-        with open(self.directory / f"fit_{self.filename}", 'wb') as handle:
+        with open(self.directory / f"fit_{file}", 'wb') as handle:
             pickle.dump(hazard_data, handle)
 
     def generate_fitted_data(self, im, coefs, hazard_fit, s_fit):
@@ -297,3 +305,11 @@ class HazardFit:
             self.record_data(info)
 
         return hazard_fit, s_fit
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+    path = Path.cwd()
+    hazardFileName = path.parents[0] / ".applications/Case1/Hazard-LAquila-Soil-C.pkl"
+    outputPath = path.parents[0] / ".applications/Case1/Output"
+    h = Hazard(hazardFileName, outputPath)
