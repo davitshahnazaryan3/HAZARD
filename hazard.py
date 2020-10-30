@@ -47,16 +47,16 @@ class Hazard:
     def read_hazard(self):
         """
         reads fitted hazard data
-        :return: dataframe, dict                            Coefficients, intensity measures and probabilities of the
+        :return: DataFrame, dict                            Coefficients, intensity measures and probabilities of the
                                                             Fitted hazard
                                                             Original hazard data
         """
-        file = os.path.basename(self.flname)
-        with open(self.outputDir / f"coef_{file}", 'rb') as file:
+        filename = os.path.basename(self.flname)
+        with open(self.outputDir / f"coef_{filename}", 'rb') as file:
             coefs = pickle.load(file)
-        with open(self.outputDir / f"fit_{file}", 'rb') as file:
+        with open(self.outputDir / f"fit_{filename}", 'rb') as file:
             hazard_data = pickle.load(file)
-        with open(self.outputDir / file, 'rb') as file:
+        with open(self.flname, 'rb') as file:
             original_hazard = pickle.load(file)
 
         return coefs, hazard_data, original_hazard
@@ -131,7 +131,7 @@ class HazardFit:
         Runs the fitting function
         :param haz_fit: bool                                    Hazard fitting function to run
         :param data: dict                                       True hazard data
-        :return: dataframe, array                               Fitted Sa and H of the hazard
+        :return: DataFrame, array                               Fitted Sa and H of the hazard
         """
         if haz_fit == 1:
             hazard_fit, s_fit = self.my_fitting(data)
@@ -181,7 +181,7 @@ class HazardFit:
         """
         Hazard fitting function (my version)
         :param data: dict               True hazard data
-        :return: dataframe, array       Fitted H and Sa of the hazard
+        :return: DataFrame, array       Fitted H and Sa of the hazard
         """
         print("[FITTING] Hazard MyVersion")
         im = data['im']
@@ -235,7 +235,7 @@ class HazardFit:
         """
         Hazard fitting function by scipy library
         :param data: dict               True hazard data
-        :return: dataframe, array       Fitted H and Sa of the hazard
+        :return: DataFrame, array       Fitted H and Sa of the hazard
         """
         print("[FITTING] Hazard Scipy")
         im = data['im']
@@ -273,7 +273,7 @@ class HazardFit:
         """
         Hazard fitting function least squares method
         :param data: dict               True hazard data
-        :return: dataframe, array       Fitted H and Sa of the hazard
+        :return: DataFrame, array       Fitted H and Sa of the hazard
         """
         print("[FITTING] Hazard leastSquare")
         im = data['im']
@@ -313,3 +313,4 @@ if __name__ == "__main__":
     hazardFileName = path.parents[0] / ".applications/Case1/Hazard-LAquila-Soil-C.pkl"
     outputPath = path.parents[0] / ".applications/Case1/Output"
     h = Hazard(hazardFileName, outputPath)
+    coefs, hazard_data, original_hazard = h.read_hazard()
