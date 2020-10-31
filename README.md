@@ -8,7 +8,7 @@ Required python libraries: matplotlib, pandas, numpy, scipy
 
 ### Future updates
 
-* [ ] Output files as *.csv
+* [ ] Output files as .csv
 
 ### Literature
 
