@@ -79,7 +79,7 @@ class HazardFit:
         self.haz_fit = haz_fit
         self.ITERATOR = np.array([0, 3, 5])
         self.saveData = save_data
-        self.hazard_fit, self.s_fit = self.run_fitting(self.haz_fit, self.read_hazard())
+        self.hazard_fit, self.s_fit = self.perform_fitting(self.haz_fit, self.read_hazard())
 
     def read_hazard(self):
         """
@@ -126,7 +126,7 @@ class HazardFit:
         else:
             raise ValueError('[EXCEPTION] Wrong version of plotting!')
 
-    def run_fitting(self, haz_fit, data):
+    def perform_fitting(self, haz_fit, data):
         """
         Runs the fitting function
         :param haz_fit: bool                                    Hazard fitting function to run
@@ -143,9 +143,9 @@ class HazardFit:
             raise ValueError('[EXCEPTION] Wrong fitting function!')
         return hazard_fit, s_fit
 
-    def record_data(self, info):
+    def export_data(self, info):
         """
-        Saves the fitting data into pickles
+        Exports the fitting data into pickles
         :param info: dict               Fitted hazard data
         :return: None
         """
@@ -159,10 +159,10 @@ class HazardFit:
 
     def generate_fitted_data(self, im, coefs, hazard_fit, s_fit):
         """
-        Generates dictionary for saving hazard data
+        Generates dictionary for exporting hazard data
         :param im: numpy array          Intensity measures
         :param coefs: DataFrame         2nd-order fit coefficients
-        :param hazard_fit: dataframe    H of the fitted hazard
+        :param hazard_fit: DataFrame    H of the fitted hazard
         :param s_fit: array             Sa of the fitted hazard
         :return: dict                   Fitted hazard data
         """
@@ -227,7 +227,7 @@ class HazardFit:
         info = self.generate_fitted_data(im, coefs, hazard_fit, s_fit)
 
         if self.saveData:
-            self.record_data(info)
+            self.export_data(info)
 
         return hazard_fit, s_fit
 
@@ -265,7 +265,7 @@ class HazardFit:
         info = self.generate_fitted_data(im, coefs, hazard_fit, s_fit)
 
         if self.saveData:
-            self.record_data(info)
+            self.export_data(info)
 
         return hazard_fit, s_fit
 
@@ -302,7 +302,7 @@ class HazardFit:
         info = self.generate_fitted_data(im, coefs, hazard_fit, s_fit)
 
         if self.saveData:
-            self.record_data(info)
+            self.export_data(info)
 
         return hazard_fit, s_fit
 
