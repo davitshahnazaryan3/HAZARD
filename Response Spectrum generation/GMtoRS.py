@@ -3,6 +3,7 @@ Software to obtain response spectra from a record.
 """
 from __future__ import division
 
+import functools
 from typing import List
 
 import pandas as pd
@@ -18,7 +19,7 @@ class ResponsSpectrumFromGM:
 		self.damping = damping
 		self.export = export
 
-	def get_sa(self, acc, dt, period, damping):
+	def get_sa(self, period, acc, dt, damping):
 		if period == 0.0:
 			# peak ground acceleration, PGA
 			period = 1e-20
@@ -66,9 +67,10 @@ class ResponsSpectrumFromGM:
 			print(gm_files[i])
 			acc = np.array(pd.read_csv(gm_path / gm_files[i], header=None)[0]) * 4
 			dt = dts[i]
-			Sa = np.zeros(len(self.T))
-			for j in range(len(self.T)):
-				Sa[j] = self.get_sa(acc, dt, self.T[j], self.damping)
+
+			Sa = list(map(functools.partial(self.get_sa, acc=acc, dt=dt, damping=self.damping),
+			              self.T))
+
 			self.RS[gm_files[i].replace('.txt', '')] = Sa
 
 		self.RS = pd.DataFrame.from_dict(self.RS)
