@@ -6,6 +6,13 @@ Improved SAC/FEMA-compatible hazard fitting.
 
 Compatible with intensity measures: Sa(T1) and Sa_avg
 
+### Requirements
+
+* Clone openquake.engine from https://github.com/gem/oq-engine, and open the terminal inside the clone directory. Activate the environment you want to install the package. Then, install the package via:
+    
+      pip install -e .
+
+
 ### Modules
 * Response Spectrum Generation
 

@@ -1,3 +1,6 @@
 .idea/misc.xml
 .idea/
 /venv/
+/Hazard/OQproc_Outputs/
+/Hazard/data/OQ_Outputs/
+/.temp/

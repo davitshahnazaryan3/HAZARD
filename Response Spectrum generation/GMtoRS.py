@@ -11,15 +11,43 @@ import numpy as np
 from pathlib import Path
 
 
-class ResponsSpectrumFromGM:
+class ResponseSpectrumFromGM:
+	# Periods
 	T = np.arange(0, 4.01, 0.01)
+	# Response spectra
 	RS = {'T1': T}
 
 	def __init__(self, damping, export=False):
+		"""
+
+		Parameters
+		----------
+		damping: float
+			Damping ratio
+		export: bool
+			Export response spectrum to .pickle and .csv?
+		"""
 		self.damping = damping
 		self.export = export
 
-	def get_sa(self, period, acc, dt, damping):
+	def get_sa(self, period, acc, dt):
+		"""
+		Get spectral acceleration at a period
+		Parameters
+		----------
+		period: float
+			Period at which to calculate the SA
+		acc: List
+			Accelerations
+		dt: float
+			Time step of the accelerogram
+
+		Returns
+		-------
+		sa: float
+			Spectral acceleration at the given period
+
+		"""
 		if period == 0.0:
 			# peak ground acceleration, PGA
 			period = 1e-20
@@ -39,8 +67,9 @@ class ResponsSpectrumFromGM:
 
 		natFreq = 1 / period
 		H = np.ones(len(fas), 'complex')
-		H[np.int_(np.arange(1, symIdx))] = np.array([natFreq ** 2 * 1 / ((natFreq ** 2 - i ** 2) + 2 * 1j * damping *
-		                                                                 i * natFreq) for i in freq[1:symIdx]])
+		H[np.int_(np.arange(1, symIdx))] = np.array([natFreq ** 2 * 1 /
+		                                             ((natFreq ** 2 - i ** 2) + 2 * 1j * self.damping * i * natFreq)
+		                                             for i in freq[1:symIdx]])
 
 		if nPts % 2 != 0:
 			H[np.int_(np.arange(len(H) - symIdx + 1, len(H)))] = np.flipud(np.conj(H[np.int_(np.arange(1, symIdx))]))
@@ -51,6 +80,18 @@ class ResponsSpectrumFromGM:
 		return sa
 
 	def derive_response_spectrum(self, dt_filepath, gm_filepath):
+		"""
+		Derives response spectrum for 1 or more ground motion records
+		Parameters
+		----------
+		dt_filepath: Path
+			Path to a file containing time steps of each ground motion of interest
+		gm_filepath: Path or List[Path]
+			Path to a file containing filenames of each ground motion of interest
+		Returns
+		-------
+		None
+		"""
 
 		if isinstance(gm_filepath, List):
 			gm_files = []
@@ -68,8 +109,7 @@ class ResponsSpectrumFromGM:
 			acc = np.array(pd.read_csv(gm_path / gm_files[i], header=None)[0]) * 4
 			dt = dts[i]
 
-			Sa = list(map(functools.partial(self.get_sa, acc=acc, dt=dt, damping=self.damping),
-			              self.T))
+			Sa = list(map(functools.partial(self.get_sa, acc=acc, dt=dt), self.T))
 
 			self.RS[gm_files[i].replace('.txt', '')] = Sa
 
@@ -87,5 +127,5 @@ if __name__ == "__main__":
 	dt_filepath = gm_path / 'FEMA_P695_unscaled_dts.txt'
 	gm_filepath = [gm_path / 'FEMA_P695_unscaled_names.txt']
 
-	rs = ResponsSpectrumFromGM(damping)
+	rs = ResponseSpectrumFromGM(damping)
 	rs.derive_response_spectrum(dt_filepath, gm_filepath)

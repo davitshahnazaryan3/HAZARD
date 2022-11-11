@@ -10,7 +10,6 @@ import numpy as np
 from pathlib import Path
 
 
-
 class Hazard:
     def __init__(self, flname, outputDir, haz_fit=1, pflag=False, save_data=True):
         """
