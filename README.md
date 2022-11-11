@@ -2,15 +2,27 @@
 
 A tool incorporated within IPBSD to perform second-order hazard fitting if necessary.
 
-The tool works with pickle files to generate outputs in pickle format for the later stages of the framework.
+Improved SAC/FEMA-compatible hazard fitting.
 
-Required python libraries: matplotlib, pandas, numpy, scipy
+Compatible with intensity measures: Sa(T1) and Sa_avg
 
-### Future updates
+### Modules
+* Response Spectrum Generation
 
-* [ ] Output files as .csv
+        Generates response spectrum from ground motion
 
-### Literature
+* Hazard.psha
 
-* Vamvatsikos D. Derivation of new SAC/FEMA performance evaluation solutions with second-order hazard approximation. 
-*Earthquake Engineering & Structural Dynamics* 2013; **42**(8): 1171-1188. DOI: 10.1002/eqe.2265
+        Performs probabilistic seismic hazard assessment (PSHA) using the Openquake engine
+
+* Hazard.spectrum
+
+        Generates response spectrum based on specified return period and hazard curves
+        
+* Hazard.hazard
+
+        Fitting of hazard function using the improved procedures
+
+* RecordSelection
+
+        Ground motion record selection using EZGM
