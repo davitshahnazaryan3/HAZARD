@@ -1,0 +1,27 @@
+2022-11-15 10:01:51,603 - INFO - Reading job file
+2022-11-15 10:01:51,604 - ERROR - Error opening file
+2022-11-15 10:03:34,531 - INFO - Reading job file
+2022-11-15 10:03:34,540 - INFO - Running OpenQuake Engine
+2022-11-15 10:03:47,035 - INFO - Completed Probabilistic Seismic Hazard Analysis
+2022-11-15 10:05:19,178 - INFO - Reading job file
+2022-11-15 10:05:19,180 - INFO - Running OpenQuake Engine
+2022-11-15 10:06:01,011 - INFO - Reading job file
+2022-11-15 10:06:01,013 - INFO - Running OpenQuake Engine
+2022-11-15 10:06:04,498 - INFO - Completed Probabilistic Seismic Hazard Analysis
+2022-11-15 10:07:20,622 - INFO - Reading job file
+2022-11-15 10:07:20,624 - INFO - Running OpenQuake Engine
+2022-11-15 10:08:54,944 - INFO - Reading job file
+2022-11-15 10:08:55,002 - INFO - Running OpenQuake Engine
+2022-11-15 10:08:58,396 - INFO - Completed Probabilistic Seismic Hazard Analysis
+2022-11-15 10:10:01,391 - INFO - Reading job file
+2022-11-15 10:10:01,394 - INFO - Running OpenQuake Engine
+2022-11-15 10:10:31,588 - INFO - Reading job file
+2022-11-15 10:10:31,591 - INFO - Running OpenQuake Engine
+2022-11-15 10:10:35,042 - INFO - Completed Probabilistic Seismic Hazard Analysis
+2022-11-15 10:11:10,024 - INFO - Reading job file
+2022-11-15 10:11:10,026 - INFO - Running OpenQuake Engine
+2022-11-15 10:11:13,460 - ERROR - Error running OpenQuake Engine: Command 'ls non_existent_file; exit 0' returned non-zero exit status 1.
+2022-11-15 10:11:13,461 - INFO - Completed Probabilistic Seismic Hazard Analysis
+2022-11-15 10:11:24,092 - INFO - Reading job file
+2022-11-15 10:11:24,094 - INFO - Running OpenQuake Engine
+2022-11-15 10:11:27,602 - ERROR - Error running OpenQuake Engine: Command 'ls non_existent_file; exit 0' returned non-zero exit status 1.

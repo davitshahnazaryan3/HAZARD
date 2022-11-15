@@ -7,6 +7,12 @@ from EzGM.utility import hazard_curve, disagg_MR, disagg_MReps, get_available_gm
     parse_sa_lt_to_avgsa
 import subprocess
 from utils import create_dir, get_range
+import logging
+
+logging.basicConfig(filename="../.logs/logs_psha.txt",
+                    level=logging.DEBUG,
+                    filemode="a",
+                    format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class PSHA:
@@ -42,20 +48,29 @@ class PSHA:
         -------
         None
         """
-        with open(self.oq_model / self.oq_ini) as f:
-            info = f.readlines()
-            for line in info:
-                if line.startswith('poes'):
-                    self.poes = [float(poe) for poe in
-                                line.split('\n')[0].split('=')[1].split(',')]
-                if line.startswith('export_dir'):
-                    self.results_dir = oq_model / line.split('\n')[0].split('=')[1].strip()
-                if line.startswith('mag_bin_width'):
-                    self.mag_bin_width = float(line.split('=', 1)[1])
-                if line.startswith('distance_bin_width'):
-                    self.distance_bin_width = float(line.split('=', 1)[1])
-                if line.startswith('reference_vs30_value'):
-                    self.reference_vs30_value = float(line.split('=', 1)[1])
+        logging.info("Reading job file")
+
+        try:
+            with open(self.oq_model / self.oq_ini) as f:
+                try:
+                    info = f.readlines()
+                    for line in info:
+                        if line.startswith('poes'):
+                            self.poes = [float(poe) for poe in
+                                        line.split('\n')[0].split('=')[1].split(',')]
+                        if line.startswith('export_dir'):
+                            self.results_dir = oq_model / line.split('\n')[0].split('=')[1].strip()
+                        if line.startswith('mag_bin_width'):
+                            self.mag_bin_width = float(line.split('=', 1)[1])
+                        if line.startswith('distance_bin_width'):
+                            self.distance_bin_width = float(line.split('=', 1)[1])
+                        if line.startswith('reference_vs30_value'):
+                            self.reference_vs30_value = float(line.split('=', 1)[1])
+                except (IOError, OSError):
+                    logging.error("Error while reading file")
+
+        except (FileNotFoundError, PermissionError, OSError):
+            logging.error("Error opening file")
 
     def run_psha(self):
         """
@@ -67,7 +82,19 @@ class PSHA:
         # Create the export directory for analysis results
         create_dir(self.results_dir)
 
+        logging.info("Running OpenQuake Engine")
         subprocess.call(['oq', 'engine', '--run', self.oq_model / self.oq_ini, '--exports', 'csv'])
+
+        try:
+            subprocess.check_output("ls non_existent_file; exit 0",
+                                    stderr=subprocess.STDOUT,
+                                    shell=True)
+
+        except subprocess.CalledProcessError as e:
+            logging.error(f"Error running OpenQuake Engine: {e}")
+            return
+
+        logging.info("Completed Probabilistic Seismic Hazard Analysis")
 
     def get_figures(self):
         """

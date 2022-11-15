@@ -35,7 +35,7 @@ def create_dir(dir_path):
 
     Parameters
     ----------
-    dir_path : str
+    dir_path : Path
         name of directory to create.
 
     None.
@@ -53,6 +53,19 @@ def create_dir(dir_path):
     if os.path.exists(dir_path):
         shutil.rmtree(dir_path, ignore_errors=False, onerror=handle_remove_read_only)
     os.makedirs(dir_path)
+
+
+def create_folder(directory):
+    """
+    creates directory if it does not exists
+    :param directory: str                   Directory to be created
+    :return: None
+    """
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print("Error: Creating directory. " + directory)
 
 
 def get_range(val, min_factor=0.2, max_factor=2.0, n=10, decimals=4):
