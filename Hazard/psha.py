@@ -1,8 +1,12 @@
-import os
+"""
+Performs Probabilistic seismic hazard assessment
+"""
+
+from pathlib import Path
 from EzGM.utility import hazard_curve, disagg_MR, disagg_MReps, get_available_gmpes, check_gmpe_attributes, \
     parse_sa_lt_to_avgsa
-
-from utils import create_dir
+import subprocess
+from utils import create_dir, get_range
 
 
 class PSHA:
@@ -12,7 +16,7 @@ class PSHA:
     poes = None
     results_dir = None
 
-    def __init__(self, oq_model, oq_ini, post_dir):
+    def __init__(self, oq_model, oq_ini, post_dir, ref_periods):
         """
         Probabilistic seismic hazard assessment
         Parameters
@@ -23,10 +27,13 @@ class PSHA:
             job.ini filename for OpenQuake to use
         post_dir:
             Path to export figures to
+        ref_periods: List
+            Reference periods [s], e.g. 0.5, [0.5, 1.0]
         """
         self.oq_model = oq_model
         self.oq_ini = oq_ini
         self.post_dir = post_dir
+        self.ref_periods = ref_periods
 
     def read_ini_file(self):
         """
@@ -35,14 +42,14 @@ class PSHA:
         -------
         None
         """
-        with open(os.path.join(self.oq_model, self.oq_ini)) as f:
+        with open(self.oq_model / self.oq_ini) as f:
             info = f.readlines()
             for line in info:
                 if line.startswith('poes'):
                     self.poes = [float(poe) for poe in
                                 line.split('\n')[0].split('=')[1].split(',')]
                 if line.startswith('export_dir'):
-                    self.results_dir = os.path.join(oq_model, line.split('\n')[0].split('=')[1].strip())
+                    self.results_dir = oq_model / line.split('\n')[0].split('=')[1].strip()
                 if line.startswith('mag_bin_width'):
                     self.mag_bin_width = float(line.split('=', 1)[1])
                 if line.startswith('distance_bin_width'):
@@ -60,10 +67,7 @@ class PSHA:
         # Create the export directory for analysis results
         create_dir(self.results_dir)
 
-        cwd = os.getcwd()  # Current working directory
-        os.chdir(oq_model)  # Change directory, head to OQ_model folder
-        os.system('oq engine --run ' + oq_ini + ' --exports csv')
-        os.chdir(cwd)  # go back to the previous working directory
+        subprocess.call(['oq', 'engine', '--run', self.oq_model / self.oq_ini, '--exports', 'csv'])
 
     def get_figures(self):
         """
@@ -107,7 +111,7 @@ class PSHA:
         return gmpes
 
     @staticmethod
-    def parse_lt_file_to_avgsa(xml_file, out_file, periods, corr_method):
+    def parse_lt_file_to_avgsa(xml_file, out_file, periods, corr_method='baker_jayaram'):
         """
 
         Parameters
@@ -127,14 +131,30 @@ class PSHA:
         """
         parse_sa_lt_to_avgsa(xml_file, out_file, periods, corr_method)
 
+    def get_period_ranges_for_sa_avg(self):
+        periods = []
+        for period in self.ref_periods:
+            periods.append(get_range(period))
+        return periods
+
 
 if __name__ == "__main__":
-    parent_path = os.path.dirname(os.path.realpath(""))
-    oq_model = os.path.join(parent_path, 'Hazard', 'data')
-    oq_ini = "AvgSa_3.ini"
-    post_dir = "OQproc_Outputs"
+    parent_path = Path("E:/") / "Data-Driven Design/PSHA"
 
-    psha = PSHA(oq_model, oq_ini, post_dir)
-    # psha.derive_openquake_info()
+    oq_model = parent_path / "AvgSa"
+    oq_ini = "AvgSa.ini"
+    post_dir = "OQproc_Outputs"
+    # ref_periods = [0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0]
+    ref_periods = [3.0]
+
+    psha = PSHA(oq_model, oq_ini, post_dir, ref_periods)
+
+    # psha.derive_openquake_info('BooreAtkinson2008')
     psha.read_ini_file()
+    periods = psha.get_period_ranges_for_sa_avg()
+    psha.parse_lt_file_to_avgsa(
+        oq_model / "gmmLT.xml",
+        oq_model / "gmmLT_sa_avg.xml",
+        periods,
+    )
     psha.run_psha()

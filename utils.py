@@ -53,3 +53,15 @@ def create_dir(dir_path):
     if os.path.exists(dir_path):
         shutil.rmtree(dir_path, ignore_errors=False, onerror=handle_remove_read_only)
     os.makedirs(dir_path)
+
+
+def get_range(val, min_factor=0.2, max_factor=2.0, n=10, decimals=4):
+    min_val = val * min_factor
+    max_val = val * max_factor
+
+    step = (max_val - min_val) / (n - 1)
+    arr = [round(min_val, 4)]
+    for i in range(1, n):
+        arr.append(round(arr[i-1] + step, decimals))
+
+    return arr

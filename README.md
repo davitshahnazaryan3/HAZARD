@@ -11,6 +11,7 @@ Compatible with intensity measures: Sa(T1) and Sa_avg
 * Clone openquake.engine from https://github.com/gem/oq-engine, and open the terminal inside the clone directory. Activate the environment you want to install the package. Then, install the package via:
     
       pip install -e .
+      pip install -r requirements.txt
 
 
 ### Modules
