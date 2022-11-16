@@ -15,6 +15,28 @@ logging.basicConfig(filename="../.logs/logs_psha.txt",
                     format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+def derive_openquake_info(gmpe=None):
+    """
+    Gets some info on GMPEs available in the OpenQuake engine
+    Parameters
+    ----------
+    gmpe: str
+        Name of the GMPE for which attributes are sought for
+
+    Returns
+    -------
+    gmpes: List
+        List of GMPEs available in the OpenQuake engine
+
+    """
+    gmpes = get_available_gmpes()
+
+    if gmpe is not None:
+        check_gmpe_attributes(gmpe)
+
+    return gmpes
+
+
 class PSHA:
     mag_bin_width = None
     distance_bin_width = None
@@ -114,28 +136,6 @@ class PSHA:
 
         # Extract and plot disaggregation results by M, R and epsilon
         disagg_MReps(self.mag_bin_width, self.distance_bin_width, self.results_dir, self.post_dir, n_rows=3)
-
-    @staticmethod
-    def derive_openquake_info(gmpe=None):
-        """
-        Gets some info on GMPEs available in the OpenQuake engine
-        Parameters
-        ----------
-        gmpe: str
-            Name of the GMPE for which attributes are sought for
-
-        Returns
-        -------
-        gmpes: List
-            List of GMPEs available in the OpenQuake engine
-
-        """
-        gmpes = get_available_gmpes()
-
-        if gmpe is not None:
-            check_gmpe_attributes(gmpe)
-
-        return gmpes
 
     @staticmethod
     def parse_lt_file_to_avgsa(xml_file, out_file, periods, corr_method='baker_jayaram'):

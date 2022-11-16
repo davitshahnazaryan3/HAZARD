@@ -34,3 +34,8 @@ Compatible with intensity measures: Sa(T1) and Sa_avg
 * RecordSelection
 
         Ground motion record selection using EZGM
+
+
+### Todos
+* [ ] Create a schema for the input hazard file format
+* [ ] Create documentation for each funcion
