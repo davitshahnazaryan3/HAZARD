@@ -167,21 +167,21 @@ class PSHA:
 
 if __name__ == "__main__":
     parent_path = Path("E:/") / "Data-Driven Design/PSHA"
-
-    oq_model = parent_path / "AvgSa"
-    oq_ini = "AvgSa.ini"
-    post_dir = "OQproc_Outputs"
-    # ref_periods = [0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0]
-    ref_periods = [3.0]
-
-    psha = PSHA(oq_model, oq_ini, post_dir, ref_periods)
-
-    # psha.derive_openquake_info('BooreAtkinson2008')
-    psha.read_ini_file()
-    periods = psha.get_period_ranges_for_sa_avg()
-    psha.parse_lt_file_to_avgsa(
-        oq_model / "gmmLT.xml",
-        oq_model / "gmmLT_sa_avg.xml",
-        periods,
-    )
-    psha.run_psha()
+    #
+    # oq_model = parent_path / "AvgSa"
+    # oq_ini = "AvgSa.ini"
+    # post_dir = "OQproc_Outputs"
+    # # ref_periods = [0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0]
+    # ref_periods = [3.0]
+    #
+    # psha = PSHA(oq_model, oq_ini, post_dir, ref_periods)
+    #
+    # # psha.derive_openquake_info('BooreAtkinson2008')
+    # psha.read_ini_file()
+    # periods = psha.get_period_ranges_for_sa_avg()
+    # psha.parse_lt_file_to_avgsa(
+    #     oq_model / "gmmLT.xml",
+    #     oq_model / "gmmLT_sa_avg.xml",
+    #     periods,
+    # )
+    # psha.run_psha()

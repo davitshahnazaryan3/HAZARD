@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from scipy.interpolate import interp1d
-
+from Hazard.utils import get_probability_of_exceedance
 from utils import export_results, create_folder
 
 logging.basicConfig(filename="../.logs/logs_spectra.txt",
@@ -164,7 +164,7 @@ class Spectrum:
                     im_name = list(data[key].keys())[0]
                     hazard[key] = data[key][im_name]
 
-        target = 1 / return_period
+        target = get_probability_of_exceedance(period)
 
         for key in hazard:
             s = hazard[key]["s"]
