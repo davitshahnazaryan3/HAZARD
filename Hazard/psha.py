@@ -81,7 +81,7 @@ class PSHA:
                             self.poes = [float(poe) for poe in
                                         line.split('\n')[0].split('=')[1].split(',')]
                         if line.startswith('export_dir'):
-                            self.results_dir = oq_model / line.split('\n')[0].split('=')[1].strip()
+                            self.results_dir = self.oq_model / line.split('\n')[0].split('=')[1].strip()
                         if line.startswith('mag_bin_width'):
                             self.mag_bin_width = float(line.split('=', 1)[1])
                         if line.startswith('distance_bin_width'):

@@ -15,7 +15,3 @@ def get_return_period(poe, investigation_time=50):
     return_period = 1 / get_annual_probability_of_exceedance(poe, investigation_time)
     return return_period
 
-
-if __name__ == "__main__":
-    get_probability_of_exceedance()
-
