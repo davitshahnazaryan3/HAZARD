@@ -12,12 +12,19 @@ import scipy.optimize as optimization
 import numpy as np
 from pathlib import Path
 import logging
-from utils import export_results
+from scipy.interpolate import interp1d
 
-logging.basicConfig(filename="../.logs/logs_hazard.txt",
-                    level=logging.DEBUG,
+from Hazard.parse_usgs_hazard import usgs_hazard
+from utils import export_results, plot_as_emf, get_project_root
+
+root = get_project_root()
+
+logging.basicConfig(filename=root / ".logs/logs_hazard.txt",
+                    level=logging.INFO,
                     filemode="a",
                     format="%(asctime)s - %(levelname)s - %(message)s")
+
+INV_T = 50
 
 
 class Hazard:
@@ -57,12 +64,133 @@ class Hazard:
         return coefs, hazard_data, original_hazard
 
 
-class HazardFit:
-    hazard_fit = None
-    s_fit = None
-    ITERATOR = np.array([0, 3, 9])
+def plotting(x, y, x_fit, y_fit, plot_apoe=True):
+    """
+    Plots the input true hazard
+    :param x: dict                                          Original X
+    :param y: int                                           Original Y
+    :param x_fit: array                                     Fitted X
+    :param y_fit: array                                     Fitted Y
+    :param plot_apoe: bool                                  Plotting APOE or POE?
+    :return: fig, ax
+    """
+    fig, ax = plt.subplots(figsize=(4, 3), dpi=100)
+    plt.scatter(x, y, label="Seismic hazard")
+    plt.loglog(x_fit, y_fit, '--', label="Fitted function")
+    plt.grid(True, which="major", ls="--")
+    plt.legend(frameon=False, loc='best')
+    plt.xlim([1e-3, 100])
+    plt.ylim([1e-6, 1])
 
-    def __init__(self, output_filename, filename, haz_fit=1, pflag=False, export=True, site_name=None):
+    plt.xlabel(r"Intensity measure, $s$, [g]")
+    if plot_apoe:
+        plt.ylabel(r"Annual probability of exceedance, $H(s)$")
+    else:
+        plt.ylabel(r"Probability of exceedance")
+
+    plt.show()
+    plt.close()
+    return fig, ax
+
+
+def read_hazard(filename, site_name=None):
+    """
+    reads provided hazard data and plots them
+    Parameters:
+    filename: Path
+    site_name: str
+
+    Returns
+    -------
+    data: dict
+        im: list
+            intensity measure names, e.g., 'PGA', 'SA(0.2)', where 0.2 stands for period in seconds
+        s: list[list]
+            intensity measure values in [g]
+        apoe: list[list]
+            Annual probability of exceedance (APoE) or PoE
+    """
+    extension = filename.suffix
+
+    im = []
+    s = []
+    apoes = []
+    poes = []
+    if extension == ".pickle" or extension == ".pkl":
+        with open(filename, 'rb') as file:
+            [im, s, apoe] = pickle.load(file)
+            im = np.array(im)
+            s = np.array(s)
+            apoes = np.array(apoe)
+            poes = 1 - np.exp(-apoes * INV_T)
+
+    elif extension == ".json" or extension == ".txt":
+        if extension == ".txt":
+            data = usgs_hazard(filename)
+        else:
+            data = json.load(open(filename))
+
+        data = data[list(data.keys())[0]]
+
+        for key in data:
+            im.append(key)
+            s.append(data[key]['s'])
+
+            if site_name is None:
+                site_name = list(data[key]['sites'].keys())[0]
+
+            apoes.append(data[key]['sites'][site_name]['apoe'])
+            poes.append(data[key]['sites'][site_name]['poe'])
+
+    elif extension == ".csv":
+        df = pd.read_csv(filename)
+        df1 = df[['statistic', 'period']]
+
+        df.drop(['lat', 'lon', 'vs30', 'statistic', 'period'], inplace=True, axis=1)
+        df = df.astype(float)
+
+        for index, row in df1.iterrows():
+            if row['statistic'] != "mean":
+                continue
+
+            im.append(row['period'])
+            apoes.append(list(df.iloc[index]))
+            s_list = []
+            for s_val in df.columns:
+                s_list.append(float(re.sub("[^0-9, .]", "", s_val)))
+            s.append(s_list)
+
+        poes = 1 - np.exp(-np.array(apoes) * INV_T)
+
+    else:
+        logging.error("Extension of hazard file not supported or file format is wrong! Supported options: "
+                      ".pickle, .json, .csv")
+        raise ValueError("Extension of hazard file not supported or file format is wrong! Supported options: "
+                         ".pickle, .json, .csv")
+
+    data = {'im': im, 's': s, 'apoe': apoes, 'poe': poes}
+
+    return data
+
+
+def read_seismic_hazard(data):
+    im = data['im']
+    s = data['s']
+    apoe = data['apoe']
+    s_fit = np.linspace(min(s[0]), max(s[0]), 1000)
+    return im, s, apoe, s_fit
+
+
+def error_function(x, s, a):
+    return np.log(a) - np.log(x[0] * np.exp(-x[2] * np.power(np.log(s), 2) - x[1] * np.log(s)))
+
+
+class HazardFit:
+    ITERATOR = [0, 3, 9]
+    s_range_to_fit = None
+
+    def __init__(self, output_filename, filename, haz_fit=1, pflag=False, export=True, site_name=None,
+                 fit_apoe=True):
         """
         init hazard fitting tool
         Parameters
@@ -73,16 +201,18 @@ class HazardFit:
             Hazard file name, e.g., *.pickle or *.pkl or *.csv or *.json
             /sample/ includes examples for each type of file
         haz_fit: int
-            Hazard fitting function to use (1, 2, 3)
+            Hazard fitting function to use (1, 2, 3, 4)
             1 - improved proposed fitting function (recommended)
-            2 - scipy curve_fit
-            3 - least squares fitting
+            2 - least-squares fitting
+            3 - linear power law, fitting constrained at two intensity levels
+            4 - fitting using Bradley et al. 2008
         pflag: bool
             Plot figures
         export: bool
             Export fitted data or not
         site_name: str
             Site name, required only for hazard.json files, if left None, the first key will be selected
+        fit_apoe: bool
         """
         self.output_filename = output_filename
         self.filename = filename
@@ -90,331 +220,344 @@ class HazardFit:
         self.haz_fit = haz_fit
         self.export = export
         self.site_name = site_name
+        self.fit_apoe = fit_apoe
 
-    def read_hazard(self):
+    def remove_zeros(self, x, y):
         """
-        reads provided hazard data and plots them
+        Gets rid of trailing zeros to avoid bias in fitting
         Returns
         -------
-        data: dict
-            im: list
-                intensity measure names, e.g., 'PGA', 'SA(0.2)', where 0.2 stands for period in seconds
-            s: list[list]
-                intensity measure values in [g]
-            poe: list[list]
-                Probability of exceedance (PoE) or annual PoE
+        x: List
+        y: List
         """
-        extension = self.filename.suffix
+        x = np.array(x)
+        y = np.array(y)
 
-        im = []
-        s = []
-        poes = []
-        if extension == ".pickle" or extension == ".pkl":
-            with open(self.filename, 'rb') as file:
-                [im, s, poe] = pickle.load(file)
-                im = np.array(im)
-                s = np.array(s)
-                poes = np.array(poe)
+        x = x[y > 0]
+        y = y[y > 0]
+        return x, y
 
-        elif extension == ".json":
-            data = json.load(open(self.filename))
-
-            data = data[list(data.keys())[0]]
-
-            for key in data:
-                im.append(key)
-                s.append(data[key]['s'])
-
-                if self.site_name is None:
-                    self.site_name = list(data[key]['sites'].keys())[0]
-
-                poes.append(data[key]['sites'][self.site_name]['poe'])
-
-        elif extension == ".csv":
-            df = pd.read_csv(self.filename)
-            df1 = df[['statistic', 'period']]
-
-            df.drop(['lat', 'lon', 'vs30', 'statistic', 'period'], inplace=True, axis=1)
-            df = df.astype(float)
-
-            for index, row in df1.iterrows():
-                if row['statistic'] != "mean":
-                    continue
-
-                im.append(row['period'])
-                poes.append(list(df.iloc[index]))
-                s_list = []
-                for s_val in df.columns:
-                    s_list.append(float(re.sub("[^0-9, .]", "", s_val)))
-                s.append(s_list)
-
-        else:
-            logging.error("Extension of hazard file not supported or file format is wrong! Supported options: "
-                          ".pickle, .json, .csv")
-            raise ValueError("Extension of hazard file not supported or file format is wrong! Supported options: "
-                             ".pickle, .json, .csv")
-
-        data = {'im': im, 's': s, 'poe': poes}
-
-        return data
-
-    @staticmethod
-    def plotting(version, data, tag=None, s_fit=None, H_fit=None):
-        """
-        Plots the input true hazard
-        :param version: str                                     Original or Fitted version to plot
-        :param data: dict                                       Hazard data
-        :param tag: int                                         Record tag
-        :param s_fit: array                                     Fitted hazard intensity measures
-        :param H_fit: array                                     Fitted hazard probabilities
-        :return: None
-        """
-        if version == "Original":
-            for i in range(len(data['im'])):
-                plt.loglog(data['s'][i], data['poe'][i])
-            plt.grid(True, which="both", ls="--")
-            plt.xlim([1e-3, 100])
-            plt.ylim([1e-4, 1])
-        elif version == "Fitted":
-            plt.scatter(data['s'][tag], data['poe'][tag])
-            #            self.data['s'][self.tag],self.data['poe'][self.tag],'-',
-            plt.loglog(s_fit, H_fit, '--')
-            plt.grid(True, which="both", ls="--")
-            plt.xlim([1e-3, 100])
-            plt.ylim([1e-6, 1])
-        else:
-            raise ValueError('[EXCEPTION] Wrong version of plotting!')
-
-        plt.xlabel(r"Intensity measure, $s$, [g]")
-        plt.ylabel(r"Annual probability of exceedance, $H$")
-
-    def perform_fitting(self):
+    def perform_fitting(self, im_level=0, iterator=None, dbe=475, mce=10000):
         """
         Runs the fitting function
         Parameters
+        im_level: int
+            Intensity measure level index
+        iterator: List[int]
+            List of 3 integer values where the fitting will be prioritized
+            Necessary only for haz_fit=1
+        dbe: float
+            First return period
+            For haz_fit=3 only
+        mce: float
+            Second return period
+            For haz_fit=3 only
         ----------
         Returns
         -------
         hazard_fit: DataFrame
-        s_fit: np.array+
+        s_fit: np.array
         """
-        data = self.read_hazard()
+        # init
+        data = read_hazard(self.filename, self.site_name)
+
+        im = data['im'][im_level]
+        s = data['s'][im_level]
+
+        # Range of IM values, where fitting will be performed
+        self.s_range_to_fit = np.linspace(min(s), max(s), 1000)
+
+        if self.fit_apoe:
+            y = data['apoe'][im_level]
+        else:
+            y = data['poe'][im_level]
+
+        print("Hazard at IMs:")
+        print(data["im"])
+        print(f"Number of available IM levels: {len(data['im'])}")
+        print(f"Number of hazard points: {len(s)}")
+        print(f"Using IM of {im}")
+
+        logging.info(f"[FITTING] Hazard - method: {self.haz_fit} - IML: {im}")
+
+        # Get rid of trailing zeros
+        s, y = self.remove_zeros(s, y)
 
         if self.haz_fit == 1:
-            hazard_fit, s_fit = self.my_fitting(data)
+            out = self.my_fitting(s, y, iterator=iterator)
         elif self.haz_fit == 2:
-            hazard_fit, s_fit = self.scipy_fitting(data)
+            out = self.leastsq_fitting(s, y)
         elif self.haz_fit == 3:
-            hazard_fit, s_fit = self.leastsq_fitting(data)
+            out = self.power_law(s, y, dbe, mce)
+        elif self.haz_fit == 4:
+            out = self.bradley_et_al_2008(s, y)
+
         else:
-            logging.error('[EXCEPTION] Wrong fitting function! Must be 1, 2, or 3')
+            logging.error('[EXCEPTION] Wrong fitting function! Must be 1, 2, 3, or 4')
             raise ValueError('[EXCEPTION] Wrong fitting function!')
 
-        return hazard_fit, s_fit
+        if self.export:
+            print("Results exported to:")
+            print(f"{self.output_filename}/{self.haz_fit}-{im}")
+            export_results(f"{self.output_filename}/{self.haz_fit}-{im}", out, 'json')
 
-    def generate_fitted_data(self, im, coefs, hazard_fit, s_fit):
-        """
-        Generates dictionary for exporting hazard data
-        Parameters
-        ----------
-        im: np.array
-            Intensity measures
-        coefs: DataFrame
-            Fitting coefficients
-        hazard_fit: DataFrame
-            Probability of exceedance (PoE) of fitted hazard curves
-        s_fit: np.array
-            Intensity measure (IM) of fitted hazard curves
+        return out
 
-        Returns
-        -------
-        info: dict
-            Fitted hazard data including PoE, IMs, Periods and coefficients
-        """
-        T = np.zeros(len(im))
-        for t in range(len(im)):
-            try:
-                T[t] = im[t].replace('SA(', '').replace(')', '')
-            except:
-                T[t] = 0.0
-
-        info = {'hazard_fit': hazard_fit, 's_fit': s_fit, 'T': T, 'coefs': coefs}
-
+    def _into_json_serializable(self, s, apoe, apoe_fit, coef):
+        info = {
+            "x": list(s),
+            "y": list(apoe),
+            "x_fit": list(self.s_range_to_fit),
+            "y_fit": list(apoe_fit),
+            "apoe": self.fit_apoe,
+            "coef": list(coef),
+        }
         return info
 
-    def my_fitting(self, data):
+    def second_order_law(self, coef):
+        apoe_fit = coef[0] * np.exp(-coef[2] * np.power(np.log(self.s_range_to_fit), 2) -
+                                    coef[1] * np.log(self.s_range_to_fit))
+        return apoe_fit
+
+    def first_order_law(self, coef):
+        return coef[0] * self.s_range_to_fit ** (-coef[1])
+
+    def my_fitting(self, s, apoe, iterator=None):
         """
         Hazard fitting function by proposed improved solution
         Parameters
         ----------
-        data: dict
-            True hazard data
+        s: List
+            Intensity measures
+        apoe: List
+            Annual probability of exceedances (or POE)
+        iterator: List[int]
+            List of 3 integer values where the fitting will be prioritized
         Returns
         -------
-        hazard_fit: DataFrame
-            Fitted Hazard data
-        s_fit: array
-            Intensity measure of hazard
-
+        dict:
+            x: List
+                Original IM range
+            y: List
+                Original APOE or POE
+            x_fit: List
+                Fitted IM range
+            y_fit: List
+                Fitted APOE or POE
+            apoe: bool
+                APOE or POE?
+            coef: List[float]
+                SAC/FEMA-compatible coefficients, [k0, k1, k2]
+            iterator: List[int]
         """
-        logging.info("[FITTING] Hazard Proposed improved solution")
-        im = data['im']
-        s = data['s']
-        poe = data['poe']
-        s_fit = np.linspace(min(s[0]), max(s[0]), 1000)
 
-        hazard_fit = pd.DataFrame(np.nan, index=range(len(s_fit)), columns=list(im))
-        coefs = pd.DataFrame(np.nan, index=['k0', 'k1', 'k2'], columns=list(im))
-
-        if self.pflag:
-            fig2, ax = plt.subplots(figsize=(4, 3), dpi=100)
+        if iterator:
+            self.ITERATOR = iterator
 
         # Fitting the hazard curves
-        for tag in range(len(im)):
-            coef = np.zeros(3)
-            # select iterator depending on where we want to have a better fit
-            iterator = self.ITERATOR
-            r = np.zeros((len(iterator), len(iterator)))
-            a = np.zeros(len(iterator))
-            cnt = 0
-            for i in iterator:
-                r_temp = np.array([1])
-                for j in range(1, len(iterator)):
-                    r_temp = np.append(r_temp, -np.power(np.log(s[tag][i]), j))
+        coef = np.zeros(3)
+        # select iterator depending on where we want to have a better fit
+        iterator = self.ITERATOR
+        r = np.zeros((len(iterator), len(iterator)))
+        a = np.zeros(len(iterator))
+        cnt = 0
+        for i in iterator:
+            r_temp = np.array([1])
+            for j in range(1, len(iterator)):
+                r_temp = np.append(r_temp, -np.power(np.log(s[i]), j))
 
-                r[cnt] = r_temp
-                a[cnt] = poe[tag][i]
-                del r_temp
-                cnt += 1
+            r[cnt] = r_temp
+            a[cnt] = apoe[i]
+            del r_temp
+            cnt += 1
 
-            temp1 = np.log(a)
-            temp2 = np.linalg.inv(r).dot(temp1)
-            temp2 = temp2.tolist()
-            coef[0] = np.exp(temp2[0])
-            coef[1] = temp2[1]
-            coef[2] = temp2[2]
+        temp1 = np.log(a)
+        temp2 = np.linalg.inv(r).dot(temp1)
+        temp2 = temp2.tolist()
 
-            H_fit = coef[0] * np.exp(-coef[2] * np.power(np.log(s_fit), 2) -
-                                     coef[1] * np.log(s_fit))
-            hazard_fit[im[tag]] = H_fit
-            coefs[im[tag]] = coef
+        coef[0] = np.exp(temp2[0])
+        coef[1] = temp2[1]
+        coef[2] = temp2[2]
 
-            if self.pflag:
-                print(tag, coef, iterator)
+        apoe_fit = self.second_order_law(coef)
 
-                if im[tag] == 'PGA' or im[tag] == 'SA(0.7)':
-                    self.plotting(version='Fitted', data=data, tag=tag, s_fit=s_fit, H_fit=H_fit)
-                    plt.tight_layout()
-                    plt.show()
+        if self.pflag:
+            plotting(s, apoe, self.s_range_to_fit, apoe_fit, self.fit_apoe)
 
-        info = self.generate_fitted_data(im, coefs, hazard_fit, s_fit)
+        info = self._into_json_serializable(s, apoe, apoe_fit, coef)
+        info['iterator'] = self.ITERATOR
 
-        if self.export:
-            export_results(self.output_filename, info, 'pickle')
+        return info
 
-        return hazard_fit, s_fit
-
-    def scipy_fitting(self, data):
+    def scipy_fit(self, s, apoe):
         """
-        Hazard fitting function by scipy library
+        In case LeastSq fails - Hazard fitting function least squares method
         Parameters
         ----------
-        data: dict
-            True hazard data
+        s: List
+            Intensity measures
+        apoe: List
+            Annual probability of exceedances (or POE)
         Returns
         -------
-        hazard_fit: DataFrame
-            Fitted Hazard data
-        s_fit: array
-            Intensity measure of hazard
-
+        dict:
+            x: List
+                Original IM range
+            y: List
+                Original APOE or POE
+            x_fit: List
+                Fitted IM range
+            y_fit: List
+                Fitted APOE or POE
+            apoe: bool
+                APOE or POE?
+            coef: List[float]
+                SAC/FEMA-compatible coefficients, [k0, k1, k2]
         """
-        logging.info("[FITTING] Hazard Scipy curve_fit")
-        im = data['im']
-        s = data['s']
-        poe = data['poe']
-        s_fit = np.linspace(min(s[0]), max(s[0]), 1000)
-        hazard_fit = pd.DataFrame(np.nan, index=range(len(s_fit)), columns=list(im))
-        coefs = pd.DataFrame(np.nan, index=['k0', 'k1', 'k2'], columns=list(im))
         x0 = np.array([0, 0, 0])
-        sigma = np.array([1.0] * len(s[0]))
+        sigma = np.array([1.0] * len(s))
 
         def func(x, a, b, c):
             return a * np.exp(-c * np.power(np.log(x), 2) - b * np.log(x))
 
+        p, pcov = optimization.curve_fit(func, s, apoe, x0, sigma)
+        apoe_fit = p[0] * np.exp(-p[2] * np.power(np.log(self.s_range_to_fit), 2) -
+                              p[1] * np.log(self.s_range_to_fit))
+
         if self.pflag:
-            fig2, ax = plt.subplots(figsize=(4, 3), dpi=100)
-        for tag in range(len(im)):
-            p, pcov = optimization.curve_fit(func, s[tag], poe[tag], x0, sigma)
-            H_fit = p[0] * np.exp(-p[2] * np.power(np.log(s_fit), 2) -
-                                  p[1] * np.log(s_fit))
-            hazard_fit[im[tag]] = H_fit
-            coefs[im[tag]] = p
+            plotting(s, apoe, self.s_range_to_fit, apoe_fit, self.fit_apoe)
 
-            if self.pflag:
-                print(tag, p)
-                self.plotting(version='Fitted', data=data, tag=tag, s_fit=s_fit, H_fit=H_fit)
-                plt.show()
+        info = self._into_json_serializable(s, apoe, apoe_fit, p)
 
-        info = self.generate_fitted_data(im, coefs, hazard_fit, s_fit)
+        return info
 
-        if self.export:
-            export_results(f"{self.output_filename}_curve_fit", info, 'pickle')
-
-        return hazard_fit, s_fit
-
-    def leastsq_fitting(self, data):
+    def leastsq_fitting(self, s, apoe):
         """
         Hazard fitting function least squares method
         Parameters
         ----------
-        data: dict
-            True hazard data
+        s: List
+            Intensity measures
+        apoe: List
+            Annual probability of exceedances (or POE)
         Returns
         -------
-        hazard_fit: DataFrame
-            Fitted Hazard data
-        s_fit: array
-            Intensity measure of hazard
+        dict:
+            x: List
+                Original IM range
+            y: List
+                Original APOE or POE
+            x_fit: List
+                Fitted IM range
+            y_fit: List
+                Fitted APOE or POE
+            apoe: bool
+                APOE or POE?
+            coef: List[float]
+                SAC/FEMA-compatible coefficients, [k0, k1, k2]
         """
-        logging.info("[FITTING] Hazard leastSquare")
-        im = data['im']
-        s = data['s']
-        poe = data['poe']
-        s_fit = np.linspace(min(s[0]), max(s[0]), 1000)
-        hazard_fit = pd.DataFrame(np.nan, index=range(len(s_fit)), columns=list(im))
-        coefs = pd.DataFrame(np.nan, index=['k0', 'k1', 'k2'], columns=list(im))
-        x0 = np.array([0, 0, 0])
-
-        def func(x, s, a):
-            return a - x[0] * np.exp(-x[2] * np.power(np.log(s), 2) - x[1] * np.log(s))
+        x0 = np.array([0.1, 0.1, 0.1])
+        p = optimization.leastsq(error_function, x0, args=(s, apoe), factor=1)[0]
+        apoe_fit = self.second_order_law(p)
 
         if self.pflag:
-            fig2, ax = plt.subplots(figsize=(4, 3), dpi=100)
-        for tag in range(len(im)):
-            p = optimization.leastsq(func, x0, args=(s[tag], poe[tag]))[0]
-            H_fit = p[0] * np.exp(-p[2] * np.power(np.log(s_fit), 2) -
-                                  p[1] * np.log(s_fit))
-            hazard_fit[im[tag]] = H_fit
-            coefs[im[tag]] = p
+            plotting(s, apoe, self.s_range_to_fit, apoe_fit, self.fit_apoe)
 
-            if self.pflag:
-                print(tag, p)
-                self.plotting(version='Fitted', data=data, tag=tag, s_fit=s_fit, H_fit=H_fit)
-                plt.show()
+        info = self._into_json_serializable(s, apoe, apoe_fit, p)
 
-        info = self.generate_fitted_data(im, coefs, hazard_fit, s_fit)
+        return info
 
-        if self.export:
-            export_results(f"{self.output_filename}_lstsq", info, 'pickle')
+    def power_law(self, s, apoe, dbe=465, mce=10000):
+        """
+        Performs fitting on a loglinear power law constrained at two intensity levels (IMLs)
+        Parameters
+        ----------
+        s: List
+            Intensity measures
+        apoe: List
+            Annual probability of exceedances (or POE)
+        dbe: int
+            Return period of first constrained IML
+        mce: int
+            Return period of second constrained IML
+        Returns
+        -------
+        dict:
+            x: List
+                Original IM range
+            y: List
+                Original APOE or POE
+            x_fit: List
+                Fitted IM range
+            y_fit: List
+                Fitted APOE or POE
+            apoe: bool
+                APOE or POE?
+            coef: List[float]
+                SAC/FEMA-compatible coefficients, [k0, k]
+        """
+        # get constraining intensity levels
+        apoe_dbe = 1 / dbe
+        apoe_mce = 1 / mce
 
-        return hazard_fit, s_fit
+        interpolation = interp1d(apoe, s)
+        s_dbe = interpolation(apoe_dbe)
+        s_mce = interpolation(apoe_mce)
 
+        # Get the fitting coefficients
+        k = np.log(apoe_dbe / apoe_mce) / np.log(s_mce / s_dbe)
+        k0 = apoe_dbe * s_dbe ** k
 
-if __name__ == "__main__":
-    path = Path.cwd().parents[0]
-    hazardFileName = path / "sample/example2.csv"
-    outputPath = path / "sample/outputs/example2"
+        # Fitted APOE
+        coef = [k0, k]
+        apoe_fit = self.first_order_law(coef)
 
-    h = HazardFit(outputPath, hazardFileName, 3, pflag=False, export=True)
-    h.perform_fitting()
+        if self.pflag:
+            plotting(s, apoe, self.s_range_to_fit, apoe_fit, self.fit_apoe)
+
+        info = self._into_json_serializable(s, apoe, apoe_fit, coef)
+
+        return info
+
+    def bradley_et_al_2008(self, s, apoe):
+        """
+        Parameters
+        ----------
+        s: List
+            Intensity measures
+        apoe: List
+            Annual probability of exceedances (or POE)
+
+        Returns
+        -------
+        dict:
+            x: List
+                Original IM range
+            y: List
+                Original APOE or POE
+            x_fit: List
+                Fitted IM range
+            y_fit: List
+                Fitted APOE or POE
+            apoe: bool
+                APOE or POE?
+            coef: List
+                Fitting coefficients [H_asy, s_asy, alpha]
+        """
+        def func(x, s, a):
+            apoe_asy = x[0]
+            s_asy = x[1]
+            alpha = x[2]
+            return np.log(a) - np.log(apoe_asy * np.exp(alpha * (np.log(s / s_asy)) ** -1))
+
+        x0 = np.array([100, 100, 50])
+
+        p = optimization.leastsq(func, x0, args=(s, apoe), factor=100)[0]
+        apoe_fit = p[0] * np.exp(p[2] * (np.log(self.s_range_to_fit / p[1])) ** -1)
+
+        if self.pflag:
+            plotting(s, apoe, self.s_range_to_fit, apoe_fit, self.fit_apoe)
+
+        info = self._into_json_serializable(s, apoe, apoe_fit, p)
+
+        return info

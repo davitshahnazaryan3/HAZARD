@@ -22,7 +22,7 @@ class Spectrum:
         Parameters
         ----------
         hazard_path: Path
-            Path to hazard curves (outputs of PSHA)
+            Path to hazard curves (outputs_old of PSHA)
         output_path: Path
             Path to export the spectra
         intensity_measure: str
