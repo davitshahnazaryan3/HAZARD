@@ -300,3 +300,11 @@
 2023-01-26 16:44:01,368 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
 2023-01-26 16:44:08,858 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
 2023-01-26 16:44:13,831 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:24:09,860 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:27:07,136 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:27:21,547 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:27:29,838 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:29:22,150 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:29:31,515 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:29:44,349 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
+2023-01-31 11:31:56,975 - INFO - [FITTING] Hazard - method: 1 - IML: PGA
