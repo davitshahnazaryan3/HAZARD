@@ -190,7 +190,7 @@ class HazardFit:
     s_range_to_fit = None
 
     def __init__(self, output_filename, filename, haz_fit=1, pflag=False, export=True, site_name=None,
-                 fit_apoe=True):
+                 fit_apoe=True, im=None, apoe=None):
         """
         init hazard fitting tool
         Parameters
@@ -213,6 +213,10 @@ class HazardFit:
         site_name: str
             Site name, required only for hazard.json files, if left None, the first key will be selected
         fit_apoe: bool
+        im: list
+            IM range for hazard, if provided, will ignore filename
+        apoe: list
+            APOE range for hazard, if provided, will ignore filename
         """
         self.output_filename = output_filename
         self.filename = filename
@@ -221,6 +225,8 @@ class HazardFit:
         self.export = export
         self.site_name = site_name
         self.fit_apoe = fit_apoe
+        self.im = im
+        self.apoe = apoe
 
     def remove_zeros(self, x, y):
         """
@@ -259,26 +265,32 @@ class HazardFit:
         s_fit: np.array
         """
         # init
-        data = read_hazard(self.filename, self.site_name)
+        if self.im is None:
+            data = read_hazard(self.filename, self.site_name)
 
-        im = data['im'][im_level]
-        s = data['s'][im_level]
+            im = data['im'][im_level]
+            s = data['s'][im_level]
+
+            if self.fit_apoe:
+                y = data['apoe'][im_level]
+            else:
+                y = data['poe'][im_level]
+
+            print("Hazard at IMs:")
+            print(data["im"])
+            print(f"Number of available IM levels: {len(data['im'])}")
+            print(f"Number of hazard points: {len(s)}")
+            print(f"Using IM of {im}")
+
+            logging.info(f"[FITTING] Hazard - method: {self.haz_fit} - IML: {im}")
+        else:
+            im = ""
+
+            s = self.im
+            y = self.apoe
 
         # Range of IM values, where fitting will be performed
         self.s_range_to_fit = np.linspace(min(s), max(s), 1000)
-
-        if self.fit_apoe:
-            y = data['apoe'][im_level]
-        else:
-            y = data['poe'][im_level]
-
-        print("Hazard at IMs:")
-        print(data["im"])
-        print(f"Number of available IM levels: {len(data['im'])}")
-        print(f"Number of hazard points: {len(s)}")
-        print(f"Using IM of {im}")
-
-        logging.info(f"[FITTING] Hazard - method: {self.haz_fit} - IML: {im}")
 
         # Get rid of trailing zeros
         s, y = self.remove_zeros(s, y)
